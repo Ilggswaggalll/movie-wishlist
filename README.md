@@ -1,0 +1,89 @@
+# Movie Wishlist — Express.js приложение
+
+## Описание проекта
+
+Movie Wishlist — это веб-приложение для поиска фильмов и формирования персонального списка желаемых к просмотру фильмов (wishlist).
+
+Приложение построено на базе **Express.js** и демонстрирует работу с REST API, middleware, маршрутизацией, взаимодействием с файлами и внешним API (PoiskKino).
+
+Пользователь может:
+- искать фильмы по названию;
+- просматривать популярные фильмы;
+- добавлять фильмы в список желаемого;
+- удалять фильмы из wishlist;
+- просматривать wishlist в отдельном режиме.
+
+---
+
+## Используемые технологии
+
+- **Node.js**
+- **Express.js**
+- **Axios** (для запросов к внешнему API)
+- **File System (fs)** — хранение данных в JSON
+- **HTML / CSS / JavaScript**
+- **Font Awesome** (иконки)
+- **GitHub Pages** (хостинг фронтенда)
+
+---
+
+## Архитектура проекта
+
+Проект разделён на модули в соответствии с принципами MVC:
+movie-wishlist/
+│
+├── controllers/
+│ ├── moviesController.js
+│ └── externalController.js
+│
+├── routes/
+│ ├── movies.js
+│ └── external.js
+│
+├── repository/
+│ └── moviesRepo.js
+│
+├── services/
+│ └── poiskkinoService.js
+│
+├── data/
+│ └── movies.json
+│
+├── public/
+│ ├── index.html
+│ ├── style.css
+│ └── script.js
+│
+├── app.js
+├── package.json
+└── README.md
+
+
+## Работа с данными
+
+Данные wishlist хранятся в файле movies.json и обрабатываются через модуль moviesRepo.js.
+
+## Внешний API
+
+Для получения информации о фильмах используется PoiskKino API:
+  Поиск фильмов,
+  Получение популярных фильмов,
+  Фильтрация и сортировка по рейтингу и году.
+
+## Интерфейс приложения
+
+Приложение представляет собой галерею фильмов с карточками, постерами, рейтингами и кнопкой добавления в wishlist.
+
+<img width="1353" height="863" alt="Снимок экрана 2025-12-14 в 16 47 02" src="https://github.com/user-attachments/assets/60676215-f71d-4029-b86d-6b9daad0bc84" />
+Галерея с популярными фильмами и сериалами
+
+<img width="1351" height="866" alt="Снимок экрана 2025-12-14 в 16 47 33" src="https://github.com/user-attachments/assets/3c300fee-1eea-41d6-bfc2-287f466e1be6" />
+Динамический поиск
+
+<img width="1352" height="868" alt="Снимок экрана 2025-12-14 в 16 48 02" src="https://github.com/user-attachments/assets/580309ba-e604-40a3-bae0-ac30f2697cac" />
+Добавление фильма или сериала в wishlist
+
+<img width="1356" height="868" alt="Снимок экрана 2025-12-14 в 16 48 24" src="https://github.com/user-attachments/assets/e2c4056f-0b9f-4312-9f62-d43ecd697db4" />
+Просмотр wishlist (+возможность удалить фильм из него)
+
+
