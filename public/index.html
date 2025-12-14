@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <title>Movie Wishlist — Галерея фильмов</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="container">
+    <!-- Шапка -->
+    <header class="header">
+        <div class="logo">
+            <i class="fas fa-film"></i>
+            <h1>Movie Wishlist</h1>
+        </div>
+
+        <div class="controls">
+            <div class="search-container">
+                <i class="fas fa-search"></i>
+                <input
+                        id="searchInput"
+                        type="text"
+                        placeholder="Поиск фильмов..."
+                        autocomplete="off"
+                        style="outline: none;">
+            </div>
+
+            <button id="wishlistToggle" class="wishlist-toggle">
+                <i class="fas fa-heart"></i>
+                <span>Мой список</span>
+                <span id="wishlistCount" class="wishlist-count">0</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Галерея фильмов -->
+    <section class="gallery-section">
+        <div class="gallery-header">
+            <h2 id="galleryTitle" class="gallery-title">
+                <i class="fas fa-fire"></i>
+                <span>Популярные фильмы</span>
+            </h2>
+            <div class="page-info">
+                Страница <span id="currentPage">1</span>
+            </div>
+        </div>
+
+        <!-- Сетка фильмов -->
+        <div id="moviesGrid" class="movies-grid">
+            <!-- Фильмы будут загружены сюда -->
+        </div>
+
+        <!-- Состояние загрузки -->
+        <div id="loading" class="loading-spinner" style="display: none;">
+            <div class="spinner"></div>
+            <p>Загрузка фильмов...</p>
+        </div>
+
+        <!-- Нет результатов -->
+        <div id="noResults" class="no-results" style="display: none;">
+            <i class="fas fa-film"></i>
+            <h3>Фильмы не найдены</h3>
+            <p>Попробуйте изменить запрос поиска</p>
+        </div>
+
+        <!-- Пагинация -->
+        <div class="pagination">
+            <button id="prevPage" class="page-btn">
+                <i class="fas fa-chevron-left"></i>
+                Назад
+            </button>
+            <button id="nextPage" class="page-btn">
+                Вперед
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    </section>
+
+    <!-- Уведомление -->
+    <div id="notification" class="notification">
+        <i class="fas fa-check-circle"></i>
+        <span id="notificationText">Фильм добавлен в список</span>
+    </div>
+</div>
+
+<script>
+    const searchInputEl = document.getElementById('searchInput');
+    const wishlistToggleEl = document.getElementById('wishlistToggle');
+    const wishlistCountEl = document.getElementById('wishlistCount');
+    const moviesGridEl = document.getElementById('moviesGrid');
+    const loadingEl = document.getElementById('loading');
+    const noResultsEl = document.getElementById('noResults');
+    const prevPageBtn = document.getElementById('prevPage');
+    const nextPageBtn = document.getElementById('nextPage');
+    const currentPageEl = document.getElementById('currentPage');
+    const galleryTitleEl = document.getElementById('galleryTitle');
+    const notificationEl = document.getElementById('notification');
+    const notificationTextEl = document.getElementById('notificationText');
+
+    let searchTimeout;
+    let currentPage = 1;
+    let totalPages = 1;
+    let currentSearchQuery = '';
+    let isWishlistMode = false;
+    let wishlistMovies = new Map(); // id -> {title, year, poster}
+    let allMovies = new Map(); // id -> movie data
+
+    // Инициализация
+    async function init() {
+        await loadWishlist();
+        await loadPopularMovies();
+    }
+
+    // Загрузка списка желаемых фильмов
+    async function loadWishlist() {
+        try {
+            const res = await fetch('/api/movies');
+            const movies = await res.json();
+
+            wishlistMovies.clear();
+            movies.forEach(movie => {
+                // Используем id из API или генерируем свой на основе названия и года
+                const movieId = movie.id || generateMovieId(movie.title, movie.year);
+                wishlistMovies.set(movieId, {
+                    title: movie.title,
+                    year: movie.year,
+                    id: movieId,
+                    poster: movie.poster || null
+                });
+            });
+
+            wishlistCountEl.textContent = wishlistMovies.size;
+        } catch (error) {
+            console.error('Ошибка загрузки wishlist:', error);
+        }
+    }
+
+    // Генерация ID для фильма
+    function generateMovieId(title, year) {
+        return `${title}-${year}`.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    }
+
+    // Загрузка популярных фильмов
+    async function loadPopularMovies(page = 1) {
+        try {
+            loadingEl.style.display = 'block';
+            noResultsEl.style.display = 'none';
+            moviesGridEl.innerHTML = '';
+
+            // Вариант 1: Фильмы с рейтингом IMDb выше 8 (как в примере документации)
+            //const apiUrl = `/api/external/movie?page=${page}&rating.imdb=8-10`;
+            const apiUrl = `/api/external/movie?page=${page}&limit=10`;
+
+            // Вариант 2: Фильмы с рейтингом Кинопоиска выше 7
+            // const apiUrl = `/api/external/movie?page=${page}&rating.kp=7-10&sortField=rating.kp&sortType=-1&limit=20`;
+
+            // Вариант 3: Только фильмы (не сериалы) с хорошим рейтингом
+            // const apiUrl = `/api/external/movie?page=${page}&rating.kp=7-10&type=movie&sortField=rating.kp&sortType=-1&limit=20`;
+
+            // Вариант 4: Фильмы из топ-250 (если API поддерживает)
+            // const apiUrl = `/api/external/movie?page=${page}&inTop250=true&limit=20`;
+
+            console.log('Fetching from:', apiUrl); // Для отладки
+
+            const res = await fetch(apiUrl);
+            const data = await res.json();
+
+            console.log('Response data:', {
+                page: data.page,
+                pages: data.pages,
+                total: data.total,
+                docsCount: data.docs?.length
+            }); // Для отладки
+
+            if (data.docs && data.docs.length > 0) {
+
+                const sortedDocs = data.docs
+                    .filter(m => m.year) // убираем фильмы без года
+                    .sort((a, b) => {
+                        // 1. по году
+                        if (b.year !== a.year) {
+                            return b.year - a.year;
+                        }
+                    });
+
+                renderMovies(sortedDocs);
+
+                currentPage = data.page || page;
+                totalPages = data.pages || 1;
+                updatePagination();
+
+                galleryTitleEl.querySelector('span').textContent = 'Популярные фильмы и сериалы';
+            } else {
+                showNoResults();
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки популярных фильмов:', error);
+            showNoResults();
+        } finally {
+            loadingEl.style.display = 'none';
+        }
+    }
+
+
+    // Загрузка фильмов по умолчанию (через поиск)
+    async function loadDefaultMovies(page = 1) {
+        try {
+            // Ищем популярные фильмы
+            const apiUrl = `/api/external/search?q=фильм&page=${page}&limit=20`;
+
+            const res = await fetch(apiUrl);
+            const data = await res.json();
+
+            if (data.docs && data.docs.length > 0) {
+                renderMovies(data.docs);
+
+                currentPage = page;
+                totalPages = data.pages || 1;
+                updatePagination();
+            } else {
+                showNoResults();
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки фильмов по умолчанию:', error);
+            showNoResults();
+        }
+    }
+
+    // Поиск фильмов
+    async function searchMovies(query, page = 1) {
+        try {
+            loadingEl.style.display = 'block';
+            noResultsEl.style.display = 'none';
+            moviesGridEl.innerHTML = '';
+
+            const apiUrl = `/api/external/search?q=${encodeURIComponent(query)}&page=${page}&limit=20`;
+
+            const res = await fetch(apiUrl);
+            const data = await res.json();
+
+            if (data.docs && data.docs.length > 0) {
+                renderMovies(data.docs);
+
+                currentPage = page;
+                totalPages = data.pages || 1;
+                updatePagination();
+            } else {
+                showNoResults();
+            }
+        } catch (error) {
+            console.error('Ошибка поиска фильмов:', error);
+            showNoResults();
+        } finally {
+            loadingEl.style.display = 'none';
+        }
+    }
+
+    // Рендер фильмов из wishlist
+    function renderWishlistMovies() {
+        moviesGridEl.innerHTML = '';
+
+        if (wishlistMovies.size === 0) {
+            showNoResults();
+            galleryTitleEl.querySelector('span').textContent = 'Мой список';
+            return;
+        }
+
+        galleryTitleEl.querySelector('span').textContent = 'Мой список';
+        const movies = Array.from(wishlistMovies.values());
+
+        // Создаем карточки для каждого фильма в wishlist
+        movies.forEach(movie => {
+            const movieData = {
+                id: movie.id,
+                name: movie.title,
+                year: movie.year,
+                poster: movie.poster
+                    ? { previewUrl: movie.poster }
+                    : null
+                ,
+                rating: { kp: null },
+                type: 'movie',
+                genres: []
+            };
+            createMovieCard(movieData, true);
+        });
+
+        // Скрываем пагинацию в режиме wishlist
+        document.querySelector('.pagination').style.display = 'none';
+    }
+
+    // Рендер обычных фильмов
+    function renderMovies(movies) {
+        moviesGridEl.innerHTML = '';
+        document.querySelector('.pagination').style.display = 'flex';
+
+        movies.forEach(movie => {
+            // Генерируем ID для проверки в wishlist
+            const generatedId = generateMovieId(movie.name || movie.alternativeName, movie.year);
+            const movieId = movie.id || generatedId;
+
+            // Проверяем, есть ли фильм в wishlist
+            const isInWishlist = wishlistMovies.has(movieId.toString()) ||
+                wishlistMovies.has(generatedId);
+
+            createMovieCard(movie, isInWishlist);
+        });
+    }
+
+    // Создание карточки фильма
+    function createMovieCard(movie, isInWishlist = false) {
+        const generatedId = generateMovieId(movie.name || movie.alternativeName, movie.year);
+        const movieId = movie.id || generatedId;
+        const title = movie.name || movie.alternativeName || "Без названия";
+        const year = movie.year || '—';
+        const rating = movie.rating?.kp || movie.rating?.imdb || null;
+        const posterUrl =     movie.poster?.previewUrl ||
+            movie.poster?.url ||
+            null;
+        const genres = movie.genres?.map(g => g.name).join(', ') || '';
+
+        const card = document.createElement('div');
+        card.className = `movie-card ${isInWishlist ? 'in-wishlist' : ''}`;
+        card.dataset.id = movieId;
+        card.dataset.title = title;
+        card.dataset.year = year;
+        card.dataset.posterUrl = posterUrl;
+        card.innerHTML = `
+                <div class="movie-poster">
+                    ${posterUrl ?
+            `<img src="${posterUrl}" alt="${title}" loading="lazy">` :
+            `<div style="display: flex; align-items: center; justify-content: center; height: 100%; background: linear-gradient(135deg, var(--primary), var(--secondary));">
+                            <i class="fas fa-film" style="font-size: 3rem; color: white; opacity: 0.7;"></i>
+                        </div>`}
+                    <button class="movie-wishlist-btn ${isInWishlist ? 'active' : ''}"
+                            data-id="${movieId}"
+                            data-title="${title}"
+                            data-year="${year}"
+                            data-poster="${posterUrl || ''}">
+                        <i class="fas ${isInWishlist ? 'fa-heart' : 'fa-heart'}"></i>
+                    </button>
+                </div>
+                <div class="movie-info">
+                    <h3 class="movie-title" title="${title}">${title}</h3>
+                    <div class="movie-year">${year}</div>
+                    ${genres ? `<div class="movie-genres">${genres}</div>` : ''}
+                    ${rating ? `
+                        <div class="movie-rating">
+                            <i class="fas fa-star"></i>
+                            <span>${rating.toFixed(1)}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+        moviesGridEl.appendChild(card);
+    }
+
+    // Показать "нет результатов"
+    function showNoResults() {
+        moviesGridEl.innerHTML = '';
+        noResultsEl.style.display = 'block';
+        document.querySelector('.pagination').style.display = 'none';
+    }
+
+    // Обновить пагинацию
+    function updatePagination() {
+        currentPageEl.textContent = currentPage;
+        prevPageBtn.disabled = currentPage <= 1;
+        nextPageBtn.disabled = currentPage >= totalPages;
+    }
+
+    // Показать уведомление
+    function showNotification(message, type = 'success') {
+        notificationTextEl.textContent = message;
+        notificationEl.className = `notification ${type}`;
+
+        const iconClass = {
+            'success': 'fas fa-check-circle',
+            'error': 'fas fa-exclamation-circle',
+            'warning': 'fas fa-exclamation-triangle'
+        }[type] || 'fas fa-info-circle';
+
+        notificationEl.querySelector('i').className = iconClass;
+
+        notificationEl.classList.add('show');
+
+        setTimeout(() => {
+            notificationEl.classList.remove('show');
+        }, 3000);
+    }
+
+    // Динамический поиск
+    searchInputEl.addEventListener('input', (e) => {
+        const query = e.target.value.trim();
+        currentSearchQuery = query;
+
+        clearTimeout(searchTimeout);
+
+        if (isWishlistMode) {
+            // В режиме wishlist фильтруем локально
+            filterWishlist(query);
+            return;
+        }
+
+        searchTimeout = setTimeout(async () => {
+            if (query) {
+                await searchMovies(query, 1);
+                galleryTitleEl.querySelector('span').textContent = 'Результаты поиска';
+            } else {
+                // Если поле поиска пустое, показываем популярные
+                await loadPopularMovies(1);
+                galleryTitleEl.querySelector('span').textContent = 'Популярные фильмы';
+            }
+        }, 300);
+    });
+
+    // Фильтрация wishlist
+    function filterWishlist(query) {
+        const allCards = moviesGridEl.querySelectorAll('.movie-card');
+
+        if (!query) {
+            // Показываем все фильмы из wishlist
+            allCards.forEach(card => {
+                card.style.display = 'flex';
+            });
+            if (wishlistMovies.size === 0) {
+                showNoResults();
+            }
+            return;
+        }
+
+        const lowerQuery = query.toLowerCase();
+        let visibleCount = 0;
+
+        allCards.forEach(card => {
+            const title = card.dataset.title.toLowerCase();
+            const year = card.dataset.year;
+
+            if (title.includes(lowerQuery) || year.includes(query)) {
+                card.style.display = 'flex';
+                visibleCount++;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+
+        if (visibleCount === 0) {
+            showNoResults();
+        } else {
+            noResultsEl.style.display = 'none';
+        }
+    }
+
+    // Переключение режима wishlist
+    wishlistToggleEl.addEventListener('click', async () => {
+        isWishlistMode = !isWishlistMode;
+
+        if (isWishlistMode) {
+            wishlistToggleEl.classList.add('active');
+            wishlistToggleEl.querySelector('i').className = 'fas fa-list';
+            wishlistToggleEl.querySelector('span').textContent = 'Все фильмы';
+            await loadWishlist();
+            renderWishlistMovies();
+        } else {
+            wishlistToggleEl.classList.remove('active');
+            wishlistToggleEl.querySelector('i').className = 'fas fa-heart';
+            wishlistToggleEl.querySelector('span').textContent = 'Мой список';
+            currentSearchQuery = '';
+            searchInputEl.value = '';
+            await loadPopularMovies(1);
+            galleryTitleEl.querySelector('span').textContent = 'Популярные фильмы';
+        }
+    });
+
+    // Обработчик для кнопок "Добавить в wishlist"
+    moviesGridEl.addEventListener('click', async (e) => {
+        const wishlistBtn = e.target.closest('.movie-wishlist-btn');
+        if (!wishlistBtn) return;
+
+        const movieId = wishlistBtn.dataset.id;
+        const title = wishlistBtn.dataset.title;
+        const year = wishlistBtn.dataset.year;
+        const poster = wishlistBtn.dataset.poster || null;
+
+        const card = wishlistBtn.closest('.movie-card');
+
+        try {
+            if (wishlistBtn.classList.contains('active')) {
+                // Удаляем из wishlist - ищем по разным возможным ID
+                const movieInWishlist = wishlistMovies.get(movieId);
+
+                if (movieInWishlist) {
+                    const deleteRes = await fetch(`/api/movies/${movieId}`, {
+                        method: 'DELETE'
+                    });
+
+
+                    if (deleteRes.ok) {
+                        await loadWishlist();
+
+                        if (isWishlistMode) {
+                            // В режиме wishlist удаляем карточку
+                            card.remove();
+                            if (wishlistMovies.size === 0) {
+                                showNoResults();
+                            }
+                        } else {
+                            // В обычном режиме обновляем кнопку
+                            wishlistBtn.classList.remove('active');
+                            card.classList.remove('in-wishlist');
+                        }
+
+                        showNotification(`"${title}" удален из списка`, 'success');
+                    } else {
+                        showNotification('Ошибка удаления фильма', 'error');
+                    }
+                }
+            } else {
+                // Проверяем, нет ли уже такого фильма в списке
+                for (let movie of wishlistMovies.values()) {
+                    if (movie.title === title && movie.year == year) {
+                        showNotification('Этот фильм уже в вашем списке!', 'warning');
+                        return;
+                    }
+                }
+
+                // Добавляем в wishlist
+                // Добавляем в wishlist
+                console.log('Sending to server:', {
+                    title,
+                    year,
+                    id: movieId,
+                    poster
+                });
+                const addRes = await fetch('/api/movies', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title,
+                        year,
+                        id: movieId,
+                        poster
+                    })
+                });
+
+                if (addRes.ok) {
+                    await loadWishlist();
+
+                    wishlistBtn.classList.add('active');
+                    card.classList.add('in-wishlist');
+
+                    showNotification(`"${title}" добавлен в список`, 'success');
+                } else {
+                    showNotification('Ошибка добавления фильма', 'error');
+                }
+            }
+        } catch (error) {
+            console.error('Ошибка обновления wishlist:', error);
+            showNotification('Ошибка обновления списка', 'error');
+        }
+    });
+
+    // Пагинация
+    prevPageBtn.addEventListener('click', () => {
+        if (currentPage > 1 && !isWishlistMode) {
+            if (currentSearchQuery) {
+                searchMovies(currentSearchQuery, currentPage - 1);
+            } else {
+                loadPopularMovies(currentPage - 1);
+            }
+        }
+    });
+
+    nextPageBtn.addEventListener('click', () => {
+        if (currentPage < totalPages && !isWishlistMode) {
+            if (currentSearchQuery) {
+                searchMovies(currentSearchQuery, currentPage + 1);
+            } else {
+                loadPopularMovies(currentPage + 1);
+            }
+        }
+    });
+
+    // Запуск приложения
+    init();
+</script>
+</body>
+</html>
